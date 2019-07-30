@@ -38,6 +38,21 @@ def record_error( data, labels, pred): #this function will record the right and 
             right.append(data[0][i])
     return right, wrong
 
+def record_error_with_labels(data, labels, pred):
+    assert len(data[0]) == len(pred), "your data and prediction don't match"
+    assert len(pred) == len(labels), "your prediction and labels don't match"
+
+    wrong = list()
+    right = list()
+    wrong_index = list()
+    for i in range(len(data)):
+        if np.argmax(pred[i]) != np.argmax(labels[i]):
+            wrong.append(data[i])
+            wrong_index.append(np.argmax(labels[i]))
+        else:
+            right.append(data[i])
+    return right, wrong, wrong_index
+
 class Logging(): #this class reduces the number of file directory changes per model
     #this is the full package deal
     '''
