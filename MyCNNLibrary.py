@@ -3,8 +3,9 @@ import numpy as np
 from Utility import Utility
 import pickle
 util = Utility()
-from DataProcess import DataStructure
-
+import csv
+import os
+from DataStructure import DataStructure
 _, _, output_size = util.get_dictionaries()
 
 
@@ -13,6 +14,101 @@ def unpickle(file):
         objects = pickle.load(fo, encoding='bytes')
     assert len(objects) > 0, "there are no weights saved"
     return objects
+
+def accuracy(pred, labels):
+    assert len(pred) == len(labels), "lengths of prediction and labels are not the same"
+    counter = 0
+    for i in range(len(pred)):
+        k = np.argmax(pred[i])
+        l = np.argmax(labels[i])
+        if k == l:
+            counter += 1
+    return float(counter) / len(pred)
+
+def record_error( data, labels, pred): #this function will record the right and wrong entries
+    assert len(data[0]) == len(pred), "your data and prediction don't match"
+    assert len(pred) == len(labels), "your prediction and labels don't match"
+
+    wrong = list()
+    right = list()
+    for i in range(len(data[0])):
+        if np.argmax(pred[i]) != np.argmax(labels[i]):
+            wrong.append(data[0][i])
+        else:
+            right.append(data[0][i])
+    return right, wrong
+
+class Logging(): #this class reduces the number of file directory changes per model
+    #this is the full package deal
+    '''
+    it logs your training loss, validation, accuracy, and l2 regularization (if you need more, there can be more!)
+    '''
+    def __init__(self, base_dir, printout_step, summary_step, save_step): #slash on the directory please!
+        assert base_dir[-1] == "/", "you forgot the slash in your base directory"
+        self.base_dir = base_dir
+        self.train_logger = csv.writer(open(self.base_dir + "xentropyloss.csv", "w"), lineterminator="\n")
+        self.acc_logger = csv.writer(open(self.base_dir + "/accuracy.csv", "w"), lineterminator="\n")
+        self.l2_logger = csv.writer(open(self.base_dir + "/l2.csv", "w"), lineterminator="\n")
+        self.valid_logger = csv.writer(open(self.base_dir + "/valid.csv", "w"), lineterminator="\n")
+        self.printout_step = printout_step
+        self.summary_step = summary_step
+        self.save_step = save_step
+
+    def log_train(self, step, prediction, label, loss, l2loss, big_list): #run me under "with summary_writer as default()
+        self.train_logger.writerow([np.asarray(loss)])
+        self.acc_logger.writerow([accuracy(prediction, label)])
+        self.l2_logger.writerow([np.asarray(l2loss)])
+
+        if step % self.printout_step == 0:
+            print("***********************")
+            print("Finished epoch", step)
+            print("Accuracy: {}".format(accuracy(prediction, label)))
+            print("Loss: {}".format(np.asarray(loss)))
+            print("***********************")
+
+        if step % self.summary_step == 0:
+            tf.summary.scalar(name="Loss", data=loss, step=step)
+            tf.summary.scalar(name="Accuracy", data=accuracy(prediction, label), step=step)
+            for var in big_list:
+                name = str(var.name)
+                tf.summary.histogram(name="Variable_" + name, data=var, step=step)
+            tf.summary.flush()
+
+        if step % self.save_step == 0:
+            print("\n##############SAVING MODE##############\n")
+            try:
+                os.remove(self.base_dir + "SAVED_WEIGHTS.pkl")
+            except:
+                print("the saved weights were not removed, because they were not there!")
+            dbfile = open(self.base_dir +  "SAVED_WEIGHTS.pkl", "ab")
+            pickle.dump(big_list, dbfile)
+
+    def make_confusion_matrix(self, prediction, label):
+        assert len(label) == len(prediction), "you seem to have messed up your dimensions!"
+        conf = np.zeros(shape=[len(label[0]), len(prediction[0])])
+        for i in range(len(prediction)):
+            k = np.argmax(prediction[i])
+            l = np.argmax(label[i])
+            conf[k][l] += 1
+        return conf
+
+    def test_log(self, prediction, label):
+        test = open(self.base_dir+ "confusion.csv", "w")
+        logger = csv.writer(test, lineterminator="\n")
+
+        conf = self.make_confusion_matrix(prediction, label)
+
+        for iterate in conf:
+            logger.writerow(iterate)
+
+        test_ = open(self.base_dir + "results.csv", "w")
+        logger_ = csv.writer(test_, lineterminator="\n")
+        logger_.writerow([accuracy(prediction, label)])
+
+    def log_valid(self, valid_accuracy, step):
+        tf.summary.scalar(name="Validation_accuracy", data=valid_accuracy, step=step)
+        self.valid_logger.writerow([valid_accuracy])
+
 
 class Convolve():
     def __init__(self, current_list, shape, name):
@@ -58,7 +154,6 @@ class Pool():
         with tf.name_scope("Pool"):
             pooled = tf.nn.max_pool(input, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name="pool")
             return pooled
-
 
 class Flatten():
     def __init__(self, shape, name):
@@ -219,7 +314,6 @@ class Inceptionv1Chunk_naive(): #for programming simplicity, this does NOT have 
             l2 = self.one_one.l2loss()
             l2 += self.three_three.l2loss()
             l2 += self.five_five.l2loss()
-
             return l2
 
 class Inceptionv1Chunk(): #for programming simplicity, this does NOT have pooling yet
@@ -230,8 +324,6 @@ class Inceptionv1Chunk(): #for programming simplicity, this does NOT have poolin
 
     def build_model_from_pickle(self, exclusive_list):
         assert len(exclusive_list) == 3*2, "there seems to be a dimension problem with the pickle list"
-
-
 
         self.one_one = Convolve(self.current_list, shape = [1, 1, self.data_depth, self.data_depth], name = self.name +
                            "_Inception_one")
@@ -281,30 +373,6 @@ class Inceptionv1Chunk(): #for programming simplicity, this does NOT have poolin
 
             return l2
 
-
-class Metrics():
-    def accuracy(self, pred, labels):
-        assert len(pred) == len(labels), "lengths of prediction and labels are not the same"
-        counter = 0
-        for i in range(len(pred)):
-            k = np.argmax(pred[i])
-            l = np.argmax(labels[i])
-            if k == l:
-                counter += 1
-        return float(counter) / len(pred)
-
-    def record_error(self, data, labels, pred):
-        assert len(data[0]) == len(pred), "your data and prediction don't match"
-        assert len(pred) == len(labels), "your prediction and labels don't match"
-
-        wrong = list()
-        right = list()
-        for i in range(len(data[0])):
-            if np.argmax(pred[i]) != np.argmax(labels[i]):
-                wrong.append(data[0][i])
-            else:
-                right.append(data[0][i])
-        return right, wrong
 
 
 
