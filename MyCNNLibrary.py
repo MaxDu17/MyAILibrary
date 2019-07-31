@@ -62,9 +62,9 @@ class Logging(): #this class reduces the number of file directory changes per mo
         assert base_dir[-1] == "/", "you forgot the slash in your base directory"
         self.base_dir = base_dir
         self.train_logger = csv.writer(open(self.base_dir + "xentropyloss.csv", "w"), lineterminator="\n")
-        self.acc_logger = csv.writer(open(self.base_dir + "/accuracy.csv", "w"), lineterminator="\n")
-        self.l2_logger = csv.writer(open(self.base_dir + "/l2.csv", "w"), lineterminator="\n")
-        self.valid_logger = csv.writer(open(self.base_dir + "/valid.csv", "w"), lineterminator="\n")
+        self.acc_logger = csv.writer(open(self.base_dir + "accuracy.csv", "w"), lineterminator="\n")
+        self.l2_logger = csv.writer(open(self.base_dir + "l2.csv", "w"), lineterminator="\n")
+        self.valid_logger = csv.writer(open(self.base_dir + "valid.csv", "w"), lineterminator="\n")
         self.printout_step = printout_step
         self.summary_step = summary_step
         self.save_step = save_step
