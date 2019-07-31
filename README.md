@@ -35,7 +35,7 @@ record_error(data, labels, predictions)
 this returns a list containing the right and wrong predicted datapoints
 
 
-###Classes
+### Classes
 ```
 Logging()
 ```
